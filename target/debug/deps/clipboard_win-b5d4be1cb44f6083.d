@@ -1,0 +1,12 @@
+C:\Users\n\Desktop\Prog\Rust\rankfide\target\debug\deps\clipboard_win-b5d4be1cb44f6083.d: C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\lib.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\options.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\sys.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\types.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\formats.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\html.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\raw.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\utils.rs
+
+C:\Users\n\Desktop\Prog\Rust\rankfide\target\debug\deps\libclipboard_win-b5d4be1cb44f6083.rmeta: C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\lib.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\options.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\sys.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\types.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\formats.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\html.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\raw.rs C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\utils.rs
+
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\lib.rs:
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\options.rs:
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\sys.rs:
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\types.rs:
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\formats.rs:
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\html.rs:
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\raw.rs:
+C:\Users\n\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clipboard-win-5.4.1\src\utils.rs:

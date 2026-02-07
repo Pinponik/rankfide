@@ -1,3 +1,4 @@
+use eframe::egui;
 use std::error::Error;
 use std::fs::File;
 use csv::ReaderBuilder;
@@ -56,7 +57,7 @@ fn load_from_csv(file: &str) -> Result<Vec<ProbabilityRecord>, Box<dyn Error>> {
     Ok(records)
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let probability = load_from_csv(r"src\table.csv")?;
-    
+fn main() {
+    let probability = load_from_csv(r"src\table.csv").unwrap();
+
 }
