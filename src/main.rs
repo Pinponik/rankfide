@@ -41,16 +41,22 @@ impl ProbabilityRecord {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let file = File::open(r"src\tabela.csv")?;
+fn load_from_csv(file: &str) -> Result<Vec<ProbabilityRecord>, Box<dyn Error>> {
+    let file = File::open(file)?;
     let mut rdr = ReaderBuilder::new()
         .delimiter(b',') 
         .has_headers(false)
         .from_reader(file);
 
+    let mut records = Vec::new();
     for result in rdr.records() {
         let record = result?;
-        println!("{:?}", record);
+        records.push(ProbabilityRecord::from_csv_record(&record)?);
     }
-    Ok(())
+    Ok(records)
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let probability = load_from_csv(r"src\table.csv")?;
+    
 }
