@@ -1,5 +1,6 @@
 use eframe::egui;
 use eframe::App;
+use eframe::Viewport;
 use std::error::Error;
 use std::fs::File;
 use csv::ReaderBuilder;
@@ -9,8 +10,10 @@ struct MyApp;
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello, World!");
-            ui.label("This is your first eframe app.");
+            ui.heading("FIDE Elo Rating Calculator");
+            ui.label("Wait, files are loading...");
+            ui.separator();
+            ui.label("by N")
         });
     }
 }
@@ -71,11 +74,22 @@ fn load_from_csv(file: &str) -> Result<Vec<ProbabilityRecord>, Box<dyn Error>> {
 }
 
 fn main() {
-    let native_options = eframe::NativeOptions::default();
+    let options = eframe::NativeOptions {
+        //resizable: false, // brak zmiany rozmiaru
+        //initial_window_size: Some(egui::vec2(400.0, 300.0)),
+        //min_window_size: Some(egui::vec2(400.0, 300.0)),
+        //max_window_size: Some(egui::vec2(400.0, 300.0)),
+        //decorated: true, // pasek tytułu: true/false 
+        viewport: Some(eframe::Viewport {
+            title: "FIDE Elo Rating Calculator".to_string(),
+            ..Default::default()
+        }),
+        centered: true, // okno na środku ekranu
+        ..Default::default() };
     let _ =
     eframe::run_native(
-        "Hello World",
-        native_options,
+        "FIDE Elo Rating Calculator",
+        options,
         Box::new(|_cc| Box::new(MyApp)),
     );
 
