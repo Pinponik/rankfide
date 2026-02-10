@@ -7,3 +7,8 @@ edition = "2024"
 csv = "1.3"
 eframe = "0.27"
 egui = "0.27"
+
+[[bin]]
+name = "rankfide"
+path = "src/main.rs"
+windows_subsystem = "windows"
