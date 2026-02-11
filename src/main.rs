@@ -1,32 +1,19 @@
-use std::thread::spawn;
-use std::sync::mpsc::channel;
-use eframe::egui;
-use eframe::App;
-use egui::ViewportBuilder;
-use std::error::Error;
+/* FIDE Elo Rating Calculator */
+
+/// CSV
 use std::fs::File;
 use csv::ReaderBuilder;
+/// CSV + GUI
+use std::thread::spawn;
+use std::sync::mpsc::{channel, Sender, Receiver};
+/// GUI
+use eframe::egui;
+use eframe::App as EframeApp;
+use egui::ViewportBuilder;
+use std::error::Error;
 
-struct MyApp;
-
-impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if ctx.input(|i| i.viewport().close_requested()) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            return;
-        }
-        
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("FIDE Elo Rating Calculator");
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui|{
-                ui.label("Wait, files are loading..."); 
-                ui.separator();
-                ui.label("by N")
-            });
-        });
-    }
-}
-
+/////////////////////////////////////////////////////////////////////////////////
+/// CSV
 
 struct ProbabilityRecord {
     min_diff: u16,
@@ -82,9 +69,76 @@ fn load_from_csv(file: &str) -> Result<Vec<ProbabilityRecord>, Box<dyn Error>> {
     Ok(records)
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// GUI
+
+struct Message {
+    text: String,
+    data: Option<AppState>,
+    msg: Option<String>,
+}
+
+struct AppState {
+
+}
+
+struct App {
+    last_record: AppState,
+    tx: Sender<Message>,
+    rx: Receiver<Message>,
+};
+
+impl App {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let (tx, rxforcsv) = channel();
+        let (txforcsv, rx) = channel();
+        spawn(move || {
+            let records = load_from_csv("probabilities.csv");
+            match records {
+                Ok(_) => {},
+                Err(_) => {
+                    txforcsv.send(Message {
+                        text: "upsplash".to_string(),
+                        data: None,
+                        msg: Some("Failed to load probabilities.csv".to_string()),
+                    })
+                }
+            }
+            loop {
+                if let Ok(message) =rxforcsv.try_recv() {
+                    if message.text == "close" { break; }
+                    if //PRACA!!! liczenie danych
+                }
+            }
+        });
+    }
+}
+
+impl EframeApp for App { 
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        
+        if ctx.input(|i| i.viewport().close_requested()) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+        
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("FIDE Elo Rating Calculator");
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui|{
+                ui.label("Wait, files are loading..."); 
+                ui.separator();
+                ui.label("by N")
+            });
+        });
+    }
+}
+
+
+
+
 fn main() {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder {
+        viewport: ViewportBuilder {
             title: Some("FIDE Elo Rating Calculator".to_string()),
             decorations: Some(false),
             resizable: Some(false),
@@ -101,9 +155,11 @@ fn main() {
     eframe::run_native(
         "FIDE Elo Rating Calculator",
         options,
-        Box::new(|_cc| Box::new(MyApp)),
+        Box::new(|cc| Box::new(App::new(cc))),
     );
-
-    let probability = load_from_csv(r"table.csv").unwrap();
+    match runner {
+        Ok(_) => {},
+        Err(e) => eprintln!("Error running the application: {}", e),
+    }
 
 }
