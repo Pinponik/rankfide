@@ -79,35 +79,70 @@ struct Message {
 }
 
 struct AppState {
-
+    my_rating: u16,
+    k_factor: u16,
+    opponents_rating: Vec<u16>,
+    is_eighteen: bool,
+    played_in_tour_with_at_least_30_games: bool,
+    had_2300: bool,
+    had_2400: bool,
 }
 
 struct App {
     last_record: AppState,
+    actual_record: AppState,
     tx: Sender<Message>,
     rx: Receiver<Message>,
-};
+}
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, rxforcsv) = channel();
         let (txforcsv, rx) = channel();
         spawn(move || {
-            let records = load_from_csv("probabilities.csv");
-            match records {
-                Ok(_) => {},
-                Err(_) => {
-                    txforcsv.send(Message {
-                        text: "upsplash".to_string(),
-                        data: None,
-                        msg: Some("Failed to load probabilities.csv".to_string()),
-                    })
+            'c:
+            for _ in 0..1 {
+                let send = |msg: Message, tx: Sender<Message>| -> Result<(), Box<dyn Error>> {
+                    txforcsv.send(msg).map_err(|_| break 'c;)); //help with this error handling, I don't know how to break from the loop in case of an error
+
                 }
-            }
-            loop {
-                if let Ok(message) =rxforcsv.try_recv() {
-                    if message.text == "close" { break; }
-                    if //PRACA!!! liczenie danych
+                
+                txforcsv.send(Message {
+                    text: "upsplash".to_string(),
+                    data: None,
+                    msg: Some("Wait, files are loading...|by N".to_string()),
+                });
+                let res = load_from_csv("probabilities.csv");
+                
+                let records;
+                match res {
+                    Ok(r) => {records = r;},
+                    Err(_) => {
+                        txforcsv.send(Message {
+                            text: "upsplash".to_string(),
+                            data: None,
+                            msg: Some("Error!|The `probabilities.csv` file is missing or inaccessible.|OK".to_string()),
+                        });
+                        break 'c;
+                    }
+                }
+                for i in 0..=5000 {
+                    if *(&records.iter().all(|r| r.min_diff <= i && r.max_diff >= i)) {
+                        txforcsv.send(Message {
+                            text: "upsplash".to_string(),
+                            data: None,
+                            msg: Some("Error!|The `probabilities.csv` file is invalid.|OK".to_string()),
+                            break 'c
+                        });
+                    }
+                }
+                loop {
+                    if let Ok(message) =rxforcsv.try_recv() {
+                        match message.text.to_str() {
+                            "close" => break 'c
+                            "calc"
+                        }
+                    }
                 }
             }
         });
