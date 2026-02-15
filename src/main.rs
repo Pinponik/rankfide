@@ -2,7 +2,7 @@
 
 /// CSV
 use std::fs::File;
-use csv::ReaderBuilder;
+use csv::{Error, ReaderBuilder};
 /// CSV + GUI
 use std::thread::spawn;
 use std::sync::mpsc::{channel, Sender, Receiver};
@@ -102,11 +102,11 @@ impl App {
         spawn(move || {
             fn main_loop(tx: Sender<Message>, rx: Receiver<Message>) -> Result<(), Box<dyn Error>> {
                 let send = |msg: Message, tx: Sender<Message>| -> Result<(), Box<dyn Error>> {
-                    tx.send(msg).map_err(|_| return Err("Failed to send message".into()));
+                    tx.send(msg).map_err(|_| return Ok(());)?;
 
                 }
                 
-                txforcsv.send(Message {
+                tx.send(Message {
                     text: "upsplash".to_string(),
                     data: None,
                     msg: Some("Wait, files are loading...|by N".to_string()),
@@ -117,12 +117,12 @@ impl App {
                 match res {
                     Ok(r) => {records = r;},
                     Err(_) => {
-                        txforcsv.send(Message {
+                        tx.send(Message {
                             text: "upsplash".to_string(),
                             data: None,
                             msg: Some("Error!|The `probabilities.csv` file is missing or inaccessible.|OK".to_string()),
                         });
-                        break 'c;
+                        return Ok(());
                     }
                 }
                 for i in 0..=5000 {
