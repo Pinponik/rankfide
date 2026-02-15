@@ -100,7 +100,7 @@ impl App {
         let (tx, rxforcsv) = channel();
         let (txforcsv, rx) = channel();
         spawn(move || {
-            fn main_loop(tx: Sender<Message>, rx: Receiver<Message>) -> Result<(), Box<dyn Error>> {
+            fn main_loop(tx: Sender<Message>, rx: Receiver<Message>) -> Result<(), Box<Error>> {
                 let send = |msg: Message, tx: Sender<Message>| -> Result<(), Box<dyn Error>> {
                     tx.send(msg).map_err(|_| return Ok(());)?;
 
