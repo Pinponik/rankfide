@@ -100,10 +100,9 @@ impl App {
         let (tx, rxforcsv) = channel();
         let (txforcsv, rx) = channel();
         spawn(move || {
-            'c:
-            for _ in 0..1 {
+            fn main_loop(tx: Sender<Message>, rx: Receiver<Message>) -> Result<(), Box<dyn Error>> {
                 let send = |msg: Message, tx: Sender<Message>| -> Result<(), Box<dyn Error>> {
-                    txforcsv.send(msg).map_err(|_| break 'c;)); //help with this error handling, I don't know how to break from the loop in case of an error
+                    tx.send(msg).map_err(|_| return Err("Failed to send message".into()));
 
                 }
                 
