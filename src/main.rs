@@ -1,16 +1,16 @@
 /* FIDE Elo Rating Calculator */
 
-/// CSV
-use std::fs::File;
 use csv::{Error, ReaderBuilder};
-/// CSV + GUI
-use std::thread::spawn;
-use std::sync::mpsc::{channel, Sender, Receiver};
+use eframe::App as EframeApp;
 /// GUI
 use eframe::egui;
-use eframe::App as EframeApp;
 use egui::ViewportBuilder;
 use std::error::Error;
+/// CSV
+use std::fs::File;
+use std::sync::mpsc::{Receiver, Sender, channel};
+/// CSV + GUI
+use std::thread::spawn;
 
 /////////////////////////////////////////////////////////////////////////////////
 /// CSV
@@ -31,7 +31,7 @@ impl ProbabilityRecord {
             prob_small: 0.0,
         }
     }
-    
+
     fn new_from(min_diff: u16, max_diff: u16, prob_big: f32, prob_small: f32) -> Self {
         Self {
             min_diff,
@@ -40,7 +40,7 @@ impl ProbabilityRecord {
             prob_small,
         }
     }
-    
+
     fn from_csv_record(record: &csv::StringRecord) -> Result<Self, Box<dyn Error>> {
         if record.len() != 4 {
             return Err("Invalid record length".into());
@@ -57,7 +57,7 @@ impl ProbabilityRecord {
 fn load_from_csv(file: &str) -> Result<Vec<ProbabilityRecord>, Box<dyn Error>> {
     let file = File::open(file)?;
     let mut rdr = ReaderBuilder::new()
-        .delimiter(b',') 
+        .delimiter(b',')
         .has_headers(false)
         .from_reader(file);
 
@@ -83,7 +83,7 @@ struct AppState {
     k_factor: u16,
     opponents_rating: Vec<u16>,
     is_eighteen: bool,
-    played_in_tour_with_at_least_30_games: bool,
+    played_in_tour_30_games: bool,
     had_2300: bool,
     had_2400: bool,
 }
@@ -100,24 +100,30 @@ impl App {
         let (tx, rxforcsv) = channel();
         let (txforcsv, rx) = channel();
         spawn(move || {
-            fn main_loop(tx: Sender<Message>, rx: Receiver<Message>) -> Result<(), Box<Error>> {
+            fn main_loop(
+                sender: Sender<Message>,
+                receiver: Receiver<Message>,
+            ) -> Result<(), Box<Error>> {
                 let send = |msg: Message, tx: Sender<Message>| -> Result<(), Box<dyn Error>> {
-                    tx.send(msg).map_err(|_| return Ok(());)?;
+                    let _ = tx.send(msg).map_err(|_| {
+                        return Ok(());
+                    })?;
+                };
 
-                }
-                
-                tx.send(Message {
+                sender.send(Message {
                     text: "upsplash".to_string(),
                     data: None,
                     msg: Some("Wait, files are loading...|by N".to_string()),
                 });
                 let res = load_from_csv("probabilities.csv");
-                
+
                 let records;
                 match res {
-                    Ok(r) => {records = r;},
+                    Ok(r) => {
+                        records = r;
+                    }
                     Err(_) => {
-                        tx.send(Message {
+                        sender.send(Message {
                             text: "upsplash".to_string(),
                             data: None,
                             msg: Some("Error!|The `probabilities.csv` file is missing or inaccessible.|OK".to_string()),
@@ -126,49 +132,63 @@ impl App {
                     }
                 }
                 for i in 0..=5000 {
-                    if *(&records.iter().all(|r| r.min_diff <= i && r.max_diff >= i)) {
-                        txforcsv.send(Message {
+                    if records.iter().all(|r| r.min_diff <= i && r.max_diff >= i) {
+                        sender.send(Message {
                             text: "upsplash".to_string(),
                             data: None,
-                            msg: Some("Error!|The `probabilities.csv` file is invalid.|OK".to_string()),
-                            break 'c
+                            msg: Some(
+                                "Error!|The `probabilities.csv` file is invalid.|OK".to_string(),
+                            ),
                         });
+                        return Ok(());
                     }
                 }
                 loop {
-                    if let Ok(message) =rxforcsv.try_recv() {
-                        match message.text.to_str() {
-                            "close" => break 'c
-                            "calc"
+                    if let Ok(message) = receiver.try_recv() {
+                        match message.text.as_str() {
+                            "close" => return Ok(()),
+                            "k-factor" => {
+                                let data = &message.data;
+                                if data.is_none() {}
+                                else {
+                                    let data = message.data.unwrap();
+                                    data.k_factor =
+                                    if !(data.is_eighteen && data.played_in_tour_30_games) {10}
+                                    else if !(data.is_eighteen && data.had_2300) {40}
+                                    else if !(data.had_2400) {20}
+                                    else {10};
+                                }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
+                Ok(())
             }
+
+            let _ = main_loop(txforcsv, rxforcsv);
         });
     }
 }
 
-impl EframeApp for App { 
+impl EframeApp for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        
         if ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
-        
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("FIDE Elo Rating Calculator");
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui|{
-                ui.label("Wait, files are loading..."); 
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.label("Wait, files are loading...");
                 ui.separator();
                 ui.label("by N")
             });
         });
     }
 }
-
-
-
 
 fn main() {
     let options = eframe::NativeOptions {
@@ -184,16 +204,14 @@ fn main() {
         centered: true,
         ..Default::default()
     };
-    
-    let runner =
-    eframe::run_native(
+
+    let runner = eframe::run_native(
         "FIDE Elo Rating Calculator",
         options,
         Box::new(|cc| Box::new(App::new(cc))),
     );
     match runner {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => eprintln!("Error running the application: {}", e),
     }
-
 }
