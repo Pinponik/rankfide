@@ -1,6 +1,6 @@
 /* FIDE Elo Rating Calculator */
 
-use csv::{Error, ReaderBuilder};
+use csv::ReaderBuilder;
 use eframe::App as EframeApp;
 /// GUI
 use eframe::egui;
@@ -96,25 +96,30 @@ struct App {
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let (tx, rxforcsv) = channel();
         let (txforcsv, rx) = channel();
         spawn(move || {
             fn main_loop(
                 sender: Sender<Message>,
                 receiver: Receiver<Message>,
-            ) -> Result<(), Box<Error>> {
-                let send = |msg: Message, tx: Sender<Message>| -> Result<(), Box<dyn Error>> {
-                    let _ = tx.send(msg).map_err(|_| {
-                        return Ok(());
-                    })?;
+            ) -> Result<(), Box<dyn Error>> {
+                let send = |msg: Message, tx: &Sender<Message>| -> Result<(), Box<dyn Error>> {
+                    let res = tx.send(msg);
+                    match res {
+                        Ok(_) => Ok(()),
+                        Err(_) => Ok(()),
+                    }
                 };
 
-                sender.send(Message {
-                    text: "upsplash".to_string(),
-                    data: None,
-                    msg: Some("Wait, files are loading...|by N".to_string()),
-                });
+                send(
+                    Message {
+                        text: "upsplash".to_string(),
+                        data: None,
+                        msg: Some("Wait, files are loading...|by N".to_string()),
+                    },
+                    &sender,
+                );
                 let res = load_from_csv("probabilities.csv");
 
                 let records;
@@ -123,23 +128,27 @@ impl App {
                         records = r;
                     }
                     Err(_) => {
-                        sender.send(Message {
+                        send(Message {
                             text: "upsplash".to_string(),
                             data: None,
                             msg: Some("Error!|The `probabilities.csv` file is missing or inaccessible.|OK".to_string()),
-                        });
+                        }, &sender);
                         return Ok(());
                     }
                 }
                 for i in 0..=5000 {
                     if records.iter().all(|r| r.min_diff <= i && r.max_diff >= i) {
-                        sender.send(Message {
-                            text: "upsplash".to_string(),
-                            data: None,
-                            msg: Some(
-                                "Error!|The `probabilities.csv` file is invalid.|OK".to_string(),
-                            ),
-                        });
+                        send(
+                            Message {
+                                text: "upsplash".to_string(),
+                                data: None,
+                                msg: Some(
+                                    "Error!|The `probabilities.csv` file is invalid.|OK"
+                                        .to_string(),
+                                ),
+                            },
+                            &sender,
+                        );
                         return Ok(());
                     }
                 }
@@ -149,26 +158,51 @@ impl App {
                             "close" => return Ok(()),
                             "k-factor" => {
                                 let data = &message.data;
-                                if data.is_none() {}
-                                else {
-                                    let data = message.data.unwrap();
+                                if data.is_none() {
+                                } else {
+                                    let mut data = message.data.unwrap();
                                     data.k_factor =
-                                    if !(data.is_eighteen && data.played_in_tour_30_games) {10}
-                                    else if !(data.is_eighteen && data.had_2300) {40}
-                                    else if !(data.had_2400) {20}
-                                    else {10};
-                                }
+                                        if !(data.is_eighteen && data.played_in_tour_30_games) {
+                                            10
+                                        } else if !(data.is_eighteen && data.had_2300) {
+                                            40
+                                        } else if !(data.had_2400) {
+                                            20
+                                        } else {
+                                            10
+                                        };
                                 }
                             }
                             _ => {}
                         }
                     }
                 }
-                Ok(())
             }
 
             let _ = main_loop(txforcsv, rxforcsv);
         });
+        Self {
+            last_record: AppState {
+                my_rating: 0,
+                k_factor: 0,
+                opponents_rating: Vec::new(),
+                is_eighteen: false,
+                played_in_tour_30_games: false,
+                had_2300: false,
+                had_2400: false,
+            },
+            actual_record: AppState {
+                my_rating: 0,
+                k_factor: 0,
+                opponents_rating: Vec::new(),
+                is_eighteen: false,
+                played_in_tour_30_games: false,
+                had_2300: false,
+                had_2400: false,
+            },
+            tx,
+            rx,
+        }
     }
 }
 
