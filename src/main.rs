@@ -78,10 +78,17 @@ struct Message {
     msg: Option<String>,
 }
 
+#[derive(Clone)]
+struct OnePlayerGame {
+    opponent_rating: u16,
+    result: f32,
+}
+
+#[derive(Clone)]
 struct AppState {
     my_rating: u16,
     k_factor: u16,
-    opponents_rating: Vec<u16>,
+    games: Vec<OnePlayerGame>,
     is_eighteen: bool,
     played_in_tour_30_games: bool,
     had_2300: bool,
@@ -93,6 +100,9 @@ struct App {
     actual_record: AppState,
     tx: Sender<Message>,
     rx: Receiver<Message>,
+    manually: bool,
+    splash: bool,
+    splash_msg: String,
 }
 
 impl App {
@@ -104,12 +114,9 @@ impl App {
                 sender: Sender<Message>,
                 receiver: Receiver<Message>,
             ) -> Result<(), Box<dyn Error>> {
-                let send = |msg: Message, tx: &Sender<Message>| -> Result<(), Box<dyn Error>> {
-                    let res = tx.send(msg);
-                    match res {
-                        Ok(_) => Ok(()),
-                        Err(_) => Ok(()),
-                    }
+                let send = |msg: Message, tx: &Sender<Message>| -> () {
+                    let _ = tx.send(msg);
+                    ()
                 };
 
                 send(
@@ -157,10 +164,10 @@ impl App {
                         match message.text.as_str() {
                             "close" => return Ok(()),
                             "k-factor" => {
-                                let data = &message.data;
-                                if data.is_none() {
+                                let mut data;
+                                if message.data.is_none() {
                                 } else {
-                                    let mut data = message.data.unwrap();
+                                    data = message.data.unwrap();
                                     data.k_factor =
                                         if !(data.is_eighteen && data.played_in_tour_30_games) {
                                             10
@@ -171,6 +178,51 @@ impl App {
                                         } else {
                                             10
                                         };
+
+                                    send(
+                                        Message {
+                                            text: "k-factor".to_string(),
+                                            data: None,
+                                            msg: Some(data.k_factor.to_string()),
+                                        },
+                                        &sender,
+                                    );
+                                }
+                            }
+                            "calc" => {
+                                if (&message).data.is_none() {
+                                } else {
+                                    let data = message.data.unwrap();
+                                    let mut sum: f64 = 0.0;
+                                    for game in data.games.iter() {
+                                        let diff = if data.my_rating > game.opponent_rating {
+                                            data.my_rating - game.opponent_rating
+                                        } else {
+                                            game.opponent_rating - data.my_rating
+                                        };
+                                        let bigger = data.my_rating > game.opponent_rating;
+                                        let prob = records
+                                            .iter()
+                                            .find(|r| r.min_diff <= diff && r.max_diff >= diff)
+                                            .unwrap();
+                                        sum += game.result as f64
+                                            - if bigger {
+                                                prob.prob_big as f64
+                                            } else {
+                                                prob.prob_small as f64
+                                            };
+                                    }
+                                    send(
+                                        Message {
+                                            text: "calc".to_string(),
+                                            data: None,
+                                            msg: Some(format!(
+                                                "The rating will change by {} points.",
+                                                (data.k_factor as f64 * sum)
+                                            )),
+                                        },
+                                        &sender,
+                                    );
                                 }
                             }
                             _ => {}
@@ -185,7 +237,7 @@ impl App {
             last_record: AppState {
                 my_rating: 0,
                 k_factor: 0,
-                opponents_rating: Vec::new(),
+                games: Vec::new(),
                 is_eighteen: false,
                 played_in_tour_30_games: false,
                 had_2300: false,
@@ -194,7 +246,7 @@ impl App {
             actual_record: AppState {
                 my_rating: 0,
                 k_factor: 0,
-                opponents_rating: Vec::new(),
+                games: Vec::new(),
                 is_eighteen: false,
                 played_in_tour_30_games: false,
                 had_2300: false,
@@ -202,6 +254,9 @@ impl App {
             },
             tx,
             rx,
+            manually: false,
+            splash: true,
+            splash_msg: "".to_string(),
         }
     }
 }
@@ -212,15 +267,9 @@ impl EframeApp for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
-
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("FIDE Elo Rating Calculator");
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.label("Wait, files are loading...");
-                ui.separator();
-                ui.label("by N")
-            });
-        });
+        if self.rx.try_recv().is_ok() {
+            // PRACA!!! Obsluga wiadomości
+        }
     }
 }
 
