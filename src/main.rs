@@ -103,6 +103,8 @@ struct App {
     manually: bool,
     splash: bool,
     splash_msg: String,
+    rating: String,
+    wait: bool,
 }
 
 impl App {
@@ -115,7 +117,9 @@ impl App {
                 receiver: Receiver<Message>,
             ) -> Result<(), Box<dyn Error>> {
                 let send = |msg: Message, tx: &Sender<Message>| -> () {
-                    let _ = tx.send(msg);
+                    if let Err(_) = tx.send(msg) {
+                        return Ok(());
+                    }
                     ()
                 };
 
@@ -127,10 +131,9 @@ impl App {
                     },
                     &sender,
                 );
-                let res = load_from_csv("probabilities.csv");
 
                 let records;
-                match res {
+                match load_from_csv("probabilities.csv") {
                     Ok(r) => {
                         records = r;
                     }
@@ -143,8 +146,9 @@ impl App {
                         return Ok(());
                     }
                 }
+
                 for i in 0..=5000 {
-                    if records.iter().all(|r| r.min_diff <= i && r.max_diff >= i) {
+                    if !records.iter().all(|r| r.min_diff <= i && r.max_diff >= i) {
                         send(
                             Message {
                                 text: "upsplash".to_string(),
@@ -159,6 +163,13 @@ impl App {
                         return Ok(());
                     }
                 }
+
+                send(Message {
+                    text: "downsplash".to_string(),
+                    data: None,
+                    msg: None,
+                });
+
                 loop {
                     if let Ok(message) = receiver.try_recv() {
                         match message.text.as_str() {
@@ -227,6 +238,12 @@ impl App {
                             }
                             _ => {}
                         }
+                    } else if let Err(_) = sender.send(Message {
+                        text: "test".to_string(),
+                        data: None,
+                        msg: None,
+                    }) {
+                        return Ok(());
                     }
                 }
             }
@@ -257,6 +274,8 @@ impl App {
             manually: false,
             splash: true,
             splash_msg: "".to_string(),
+            rating: "".to_string(),
+            wait: false,
         }
     }
 }
@@ -267,9 +286,58 @@ impl EframeApp for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
-        if self.rx.try_recv().is_ok() {
-            // PRACA!!! Obsluga wiadomości
+        if let Ok(data) = self.rx.try_recv()
+            && !self.wait
+        {
+            match data.text.as_str() {
+                "upsplash" => {
+                    self.splash = true;
+                    self.splash_msg = data.msg.unwrap_or("".to_string());
+                }
+                "downsplash" => {
+                    self.splash = false;
+                    self.splash_msg = "".to_string();
+                }
+                "k-factor" => {
+                    self.actual_record.k_factor = data
+                        .msg
+                        .unwrap_or("0".to_string())
+                        .parse::<u16>()
+                        .unwrap_or(0);
+                }
+                "calc" => {
+                    self.rating = data.msg.unwrap_or("".to_string());
+                }
+                _ => {}
+            }
+        } else if let Err(_) = self.tx.send(Message {
+            text: "test".to_string(),
+            data: None,
+            msg: None,
+        }) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
         }
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            if self.splash {
+                let text = self.splash_msg.split('|').collect::<Vec<&str>>();
+                ui.heading("FIDE Elo Rating Calculator");
+                ui.vertical_centered(|ui| {
+                    ui.label(text[0]);
+                    ui.separator();
+                    ui.label(text[1]);
+                });
+                if text.len() > 2 {
+                    self.wait = true;
+                    if ui.button(text[2]).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                }
+            } else {
+                // PRACA!! Wyświetlanie okna głównego interfejsu, w którym użytkownik będzie mógł wprowadzać dane i obliczać zmianę rankingu.
+            }
+        });
     }
 }
 
