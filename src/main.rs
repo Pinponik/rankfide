@@ -86,6 +86,7 @@ struct OnePlayerGame {
 
 #[derive(Clone)]
 struct AppState {
+    has_rating: bool,
     my_rating: u16,
     k_factor: u16,
     games: Vec<OnePlayerGame>,
@@ -93,6 +94,7 @@ struct AppState {
     played_in_tour_30_games: bool,
     had_2300: bool,
     had_2400: bool,
+    games_text: String,
 }
 
 struct App {
@@ -116,12 +118,11 @@ impl App {
                 sender: Sender<Message>,
                 receiver: Receiver<Message>,
             ) -> Result<(), Box<dyn Error>> {
-                let send = |msg: Message, tx: &Sender<Message>| -> () {
-                    if let Err(_) = tx.send(msg) {
-                        return Ok(());
-                    }
-                    ()
-                };
+                let send =
+                    |msg: Message, tx: &Sender<Message>| -> Result<(), Box<dyn Error + 'static>> {
+                        tx.send(msg)
+                            .map_err(|e| Box::new(e) as Box<dyn Error + 'static>)
+                    };
 
                 send(
                     Message {
@@ -130,7 +131,7 @@ impl App {
                         msg: Some("Wait, files are loading...|by N".to_string()),
                     },
                     &sender,
-                );
+                )?;
 
                 let records;
                 match load_from_csv("probabilities.csv") {
@@ -142,7 +143,7 @@ impl App {
                             text: "upsplash".to_string(),
                             data: None,
                             msg: Some("Error!|The `probabilities.csv` file is missing or inaccessible.|OK".to_string()),
-                        }, &sender);
+                        }, &sender)?;
                         return Ok(());
                     }
                 }
@@ -159,16 +160,19 @@ impl App {
                                 ),
                             },
                             &sender,
-                        );
+                        )?;
                         return Ok(());
                     }
                 }
 
-                send(Message {
-                    text: "downsplash".to_string(),
-                    data: None,
-                    msg: None,
-                });
+                send(
+                    Message {
+                        text: "downsplash".to_string(),
+                        data: None,
+                        msg: None,
+                    },
+                    &sender,
+                )?;
 
                 loop {
                     if let Ok(message) = receiver.try_recv() {
@@ -197,7 +201,7 @@ impl App {
                                             msg: Some(data.k_factor.to_string()),
                                         },
                                         &sender,
-                                    );
+                                    )?;
                                 }
                             }
                             "calc" => {
@@ -233,7 +237,7 @@ impl App {
                                             )),
                                         },
                                         &sender,
-                                    );
+                                    )?;
                                 }
                             }
                             _ => {}
@@ -252,6 +256,7 @@ impl App {
         });
         Self {
             last_record: AppState {
+                has_rating: false,
                 my_rating: 0,
                 k_factor: 0,
                 games: Vec::new(),
@@ -259,8 +264,10 @@ impl App {
                 played_in_tour_30_games: false,
                 had_2300: false,
                 had_2400: false,
+                games_text: "".to_string(),
             },
             actual_record: AppState {
+                has_rating: true,
                 my_rating: 0,
                 k_factor: 0,
                 games: Vec::new(),
@@ -268,6 +275,7 @@ impl App {
                 played_in_tour_30_games: false,
                 had_2300: false,
                 had_2400: false,
+                games_text: "".to_string(),
             },
             tx,
             rx,
@@ -335,7 +343,46 @@ impl EframeApp for App {
                     }
                 }
             } else {
-                // PRACA!! Wyświetlanie okna głównego interfejsu, w którym użytkownik będzie mógł wprowadzać dane i obliczać zmianę rankingu.
+                ui.heading("FIDE Elo Rating Calculator");
+                ui.vertical_centered(|ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.actual_record.games_text)
+                                .desired_rows(10),
+                        )
+                    });
+                    ui.separator();
+                    ui.checkbox(
+                        &mut self.actual_record.is_eighteen,
+                        "Is 18 years old or older",
+                    );
+                    ui.checkbox(
+                        &mut self.actual_record.played_in_tour_30_games,
+                        "Played at least 30 games in the tournament",
+                    );
+                    ui.checkbox(
+                        &mut self.actual_record.had_2300,
+                        "Had a rating of at least 2300",
+                    );
+                    let mut active = self.actual_record.had_2300;
+                    ui.add_enabled(active, |ui: &mut egui::Ui| {
+                        ui.checkbox(
+                            &mut self.actual_record.had_2400,
+                            "Had a rating of at least 2400",
+                        )
+                    });
+                    ui.separator();
+                    ui.checkbox(&mut self.actual_record.has_rating, "Have a rating");
+                    let mut active = self.actual_record.has_rating;
+                    ui.add_enabled(active, |ui: &mut egui::Ui| {
+                        ui.add(
+                            egui::DragValue::new(&mut self.actual_record.my_rating)
+                                .clamp_range(1400..=5000)
+                                .prefix("Have rating: "),
+                        )
+                    });
+                    //ui
+                });
             }
         });
     }
