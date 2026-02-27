@@ -23,6 +23,7 @@ struct ProbabilityRecord {
 }
 
 impl ProbabilityRecord {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
             min_diff: 0,
@@ -78,7 +79,7 @@ struct Message {
     msg: Option<String>,
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 struct OnePlayerGame {
     opponent_rating: u16,
     result: f32,
@@ -99,7 +100,7 @@ struct AppState {
 
 struct App {
     last_record: AppState,
-    actual_record: AppState,
+    current_record: AppState,
     tx: Sender<Message>,
     rx: Receiver<Message>,
     manually: bool,
@@ -107,6 +108,7 @@ struct App {
     splash_msg: String,
     rating: String,
     wait: bool,
+    text: Vec<String>,
 }
 
 impl App {
@@ -175,7 +177,7 @@ impl App {
                 )?;
 
                 loop {
-                    if let Ok(message) = receiver.try_recv() {
+                    if let Ok(message) = receiver.recv() {
                         match message.text.as_str() {
                             "close" => return Ok(()),
                             "k-factor" => {
@@ -242,11 +244,7 @@ impl App {
                             }
                             _ => {}
                         }
-                    } else if let Err(_) = sender.send(Message {
-                        text: "test".to_string(),
-                        data: None,
-                        msg: None,
-                    }) {
+                    } else {
                         return Ok(());
                     }
                 }
@@ -266,7 +264,7 @@ impl App {
                 had_2400: false,
                 games_text: "".to_string(),
             },
-            actual_record: AppState {
+            current_record: AppState {
                 has_rating: true,
                 my_rating: 0,
                 k_factor: 0,
@@ -284,6 +282,7 @@ impl App {
             splash_msg: "".to_string(),
             rating: "".to_string(),
             wait: false,
+            text: Vec::new(),
         }
     }
 }
@@ -301,13 +300,14 @@ impl EframeApp for App {
                 "upsplash" => {
                     self.splash = true;
                     self.splash_msg = data.msg.unwrap_or("".to_string());
+                    self.text = self.splash_msg.split('|').map(|s| s.to_string()).collect();
                 }
                 "downsplash" => {
                     self.splash = false;
                     self.splash_msg = "".to_string();
                 }
                 "k-factor" => {
-                    self.actual_record.k_factor = data
+                    self.current_record.k_factor = data
                         .msg
                         .unwrap_or("0".to_string())
                         .parse::<u16>()
@@ -329,16 +329,23 @@ impl EframeApp for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             if self.splash {
-                let text = self.splash_msg.split('|').collect::<Vec<&str>>();
+                let mut text = Vec::new();
+                for i in 0..self.text.len() {
+                    text.push(self.text[i].clone());
+                }
                 ui.heading("FIDE Elo Rating Calculator");
-                ui.vertical_centered(|ui| {
-                    ui.label(text[0]);
-                    ui.separator();
-                    ui.label(text[1]);
+                ui.horizontal_centered(|ui| {
+                    if self.text.len() > 0 {
+                        ui.label(text[0].clone());
+                    }
+                    if self.text.len() > 1 {
+                        ui.separator();
+                        ui.label(text[1].clone());
+                    }
                 });
-                if text.len() > 2 {
+                if self.text.len() > 2 {
                     self.wait = true;
-                    if ui.button(text[2]).clicked() {
+                    if ui.button(text[2].clone()).clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 }
@@ -347,36 +354,34 @@ impl EframeApp for App {
                 ui.vertical_centered(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.add(
-                            egui::TextEdit::multiline(&mut self.actual_record.games_text)
+                            egui::TextEdit::multiline(&mut self.current_record.games_text)
                                 .desired_rows(10),
                         )
                     });
                     ui.separator();
                     ui.checkbox(
-                        &mut self.actual_record.is_eighteen,
+                        &mut self.current_record.is_eighteen,
                         "Is 18 years old or older",
                     );
                     ui.checkbox(
-                        &mut self.actual_record.played_in_tour_30_games,
+                        &mut self.current_record.played_in_tour_30_games,
                         "Played at least 30 games in the tournament",
                     );
                     ui.checkbox(
-                        &mut self.actual_record.had_2300,
+                        &mut self.current_record.had_2300,
                         "Had a rating of at least 2300",
                     );
-                    let mut active = self.actual_record.had_2300;
-                    ui.add_enabled(active, |ui: &mut egui::Ui| {
+                    ui.add_enabled(self.current_record.had_2300, |ui: &mut egui::Ui| {
                         ui.checkbox(
-                            &mut self.actual_record.had_2400,
+                            &mut self.current_record.had_2400,
                             "Had a rating of at least 2400",
                         )
                     });
                     ui.separator();
-                    ui.checkbox(&mut self.actual_record.has_rating, "Have a rating");
-                    let mut active = self.actual_record.has_rating;
-                    ui.add_enabled(active, |ui: &mut egui::Ui| {
+                    ui.checkbox(&mut self.current_record.has_rating, "Have a rating");
+                    ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
                         ui.add(
-                            egui::DragValue::new(&mut self.actual_record.my_rating)
+                            egui::DragValue::new(&mut self.current_record.my_rating)
                                 .clamp_range(1400..=5000)
                                 .prefix("Have rating: "),
                         )
