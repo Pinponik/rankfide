@@ -305,6 +305,7 @@ impl EframeApp for App {
                 "downsplash" => {
                     self.splash = false;
                     self.splash_msg = "".to_string();
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
                 }
                 "k-factor" => {
                     self.current_record.k_factor = data
