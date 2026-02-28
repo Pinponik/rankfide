@@ -151,7 +151,7 @@ impl App {
                 }
 
                 for i in 0..=5000 {
-                    if !records.iter().all(|r| r.min_diff <= i && r.max_diff >= i) {
+                    if !records.iter().any(|r| r.min_diff <= i && r.max_diff >= i) {
                         send(
                             Message {
                                 text: "upsplash".to_string(),
@@ -323,8 +323,10 @@ impl EframeApp for App {
             data: None,
             msg: None,
         }) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            return;
+            if !self.wait {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                return;
+            }
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -334,15 +336,15 @@ impl EframeApp for App {
                     text.push(self.text[i].clone());
                 }
                 ui.heading("FIDE Elo Rating Calculator");
-                ui.horizontal_centered(|ui| {
-                    if self.text.len() > 0 {
-                        ui.label(text[0].clone());
-                    }
-                    if self.text.len() > 1 {
-                        ui.separator();
-                        ui.label(text[1].clone());
-                    }
-                });
+                let mut layout = if text.len() > 0 {
+                    text[0].clone()
+                } else {
+                    "".to_string()
+                };
+                if text.len() > 1 {
+                    layout.push_str(&text[1]);
+                }
+                ui.label(layout);
                 if self.text.len() > 2 {
                     self.wait = true;
                     if ui.button(text[2].clone()).clicked() {
@@ -399,9 +401,8 @@ fn main() {
             title: Some("FIDE Elo Rating Calculator".to_string()),
             decorations: Some(false),
             resizable: Some(false),
-            max_inner_size: Some(egui::vec2(230.0, 60.0)),
-            min_inner_size: Some(egui::vec2(230.0, 60.0)),
-            inner_size: Some(egui::vec2(230.0, 60.0)),
+            min_inner_size: Some(egui::vec2(270.0, 80.0)),
+            inner_size: Some(egui::vec2(270.0, 80.0)),
             ..Default::default()
         },
         centered: true,
