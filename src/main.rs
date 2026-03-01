@@ -288,7 +288,7 @@ impl App {
 }
 
 impl EframeApp for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         if ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
@@ -305,7 +305,9 @@ impl EframeApp for App {
                 "downsplash" => {
                     self.splash = false;
                     self.splash_msg = "".to_string();
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                        400.0, 500.0,
+                    )));
                 }
                 "k-factor" => {
                     self.current_record.k_factor = data
@@ -353,7 +355,38 @@ impl EframeApp for App {
                     }
                 }
             } else {
-                ui.heading("FIDE Elo Rating Calculator");
+                fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+                    egui::TopBottomPanel::top("custom_title_bar").show(ctx, |ui| {
+                        let height = 28.0;
+                        let (rect, response) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width(), height),
+                            egui::Sense::click_and_drag(),
+                        );
+                        ui.painter()
+                            .rect_filled(rect, 0.0, ui.visuals().window_fill());
+                        ui.allocate_ui_at_rect(rect, |ui| {
+                            ui.horizontal(|ui| {
+                                if ui.button("✕").clicked() {
+                                    frame.close();
+                                }
+                                if ui.button("–").clicked() {
+                                    frame.set_minimized(true);
+                                }
+                                ui.add_space(ui.available_width() / 2.0 - 40.0);
+                                ui.label("Moja aplikacja");
+                            });
+                        });
+                        if response.dragged() {
+                            frame.drag_window();
+                        }
+                    });
+                    egui::CentralPanel::default().show(ctx, |_ui| {});
+                }
+                egui::CentralPanel::default().show(ctx, |_ui| {});
+                ui.vertical(|ui| {
+                    ui.heading("FIDE Elo Rating Calculator");
+                    ui.drag
+                });
                 ui.vertical_centered(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.add(
@@ -389,6 +422,9 @@ impl EframeApp for App {
                                 .prefix("Have rating: "),
                         )
                     });
+                    if !self.current_record.had_2300 {
+                        self.current_record.had_2400 = false;
+                    }
                     //ui
                 });
             }
