@@ -288,7 +288,7 @@ impl App {
 }
 
 impl EframeApp for App {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
@@ -306,7 +306,7 @@ impl EframeApp for App {
                     self.splash = false;
                     self.splash_msg = "".to_string();
                     ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                        400.0, 500.0,
+                        700.0, 500.0,
                     )));
                 }
                 "k-factor" => {
@@ -355,77 +355,74 @@ impl EframeApp for App {
                     }
                 }
             } else {
-                fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-                    egui::TopBottomPanel::top("custom_title_bar").show(ctx, |ui| {
-                        let height = 28.0;
-                        let (rect, response) = ui.allocate_exact_size(
-                            egui::vec2(ui.available_width(), height),
-                            egui::Sense::click_and_drag(),
-                        );
-                        ui.painter()
-                            .rect_filled(rect, 0.0, ui.visuals().window_fill());
-                        ui.allocate_ui_at_rect(rect, |ui| {
-                            ui.horizontal(|ui| {
-                                if ui.button("✕").clicked() {
-                                    frame.close();
-                                }
-                                if ui.button("–").clicked() {
-                                    frame.set_minimized(true);
-                                }
-                                ui.add_space(ui.available_width() / 2.0 - 40.0);
-                                ui.label("Moja aplikacja");
-                            });
+                egui::TopBottomPanel::top("custom_title_bar").show(ctx, |ui| {
+                    let height = 28.0;
+                    let (rect, response) = ui.allocate_exact_size(
+                        egui::vec2(ui.available_width(), height),
+                        egui::Sense::click_and_drag(),
+                    );
+                    ui.painter()
+                        .rect_filled(rect, 0.0, ui.visuals().window_fill());
+                    ui.allocate_ui_at_rect(rect, |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button("X").clicked() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if ui.button("–").clicked() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                            }
+                            ui.add_space(ui.available_width() / 2.0 - 40.0);
+                            ui.label("FIDE Elo Rating Calculator      ");
+                            ui.add_space(ui.available_width() / 2.0 - 40.0);
                         });
-                        if response.dragged() {
-                            frame.drag_window();
-                        }
                     });
-                    egui::CentralPanel::default().show(ctx, |_ui| {});
-                }
-                egui::CentralPanel::default().show(ctx, |_ui| {});
-                ui.vertical(|ui| {
-                    ui.heading("FIDE Elo Rating Calculator");
-                    ui.drag
+                    if response.dragged() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    }
                 });
-                ui.vertical_centered(|ui| {
+
+                egui::CentralPanel::default().show(ctx, |_ui| {});
+                ui.add_space(40.0);
+                ui.horizontal(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
                         ui.add(
                             egui::TextEdit::multiline(&mut self.current_record.games_text)
-                                .desired_rows(10),
+                                .desired_rows(100),
                         )
                     });
                     ui.separator();
-                    ui.checkbox(
-                        &mut self.current_record.is_eighteen,
-                        "Is 18 years old or older",
-                    );
-                    ui.checkbox(
-                        &mut self.current_record.played_in_tour_30_games,
-                        "Played at least 30 games in the tournament",
-                    );
-                    ui.checkbox(
-                        &mut self.current_record.had_2300,
-                        "Had a rating of at least 2300",
-                    );
-                    ui.add_enabled(self.current_record.had_2300, |ui: &mut egui::Ui| {
+                    ui.vertical(|ui| {
                         ui.checkbox(
-                            &mut self.current_record.had_2400,
-                            "Had a rating of at least 2400",
-                        )
+                            &mut self.current_record.is_eighteen,
+                            "Is 18 years old or older",
+                        );
+                        ui.checkbox(
+                            &mut self.current_record.played_in_tour_30_games,
+                            "Played at least 30 games in the tournament",
+                        );
+                        ui.checkbox(
+                            &mut self.current_record.had_2300,
+                            "Had a rating of at least 2300",
+                        );
+                        ui.add_enabled(self.current_record.had_2300, |ui: &mut egui::Ui| {
+                            ui.checkbox(
+                                &mut self.current_record.had_2400,
+                                "Had a rating of at least 2400",
+                            )
+                        });
+                        ui.separator();
+                        ui.checkbox(&mut self.current_record.has_rating, "Have a rating");
+                        ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
+                            ui.add(
+                                egui::DragValue::new(&mut self.current_record.my_rating)
+                                    .clamp_range(1400..=5000)
+                                    .prefix("Have rating: "),
+                            )
+                        });
+                        if !self.current_record.had_2300 {
+                            self.current_record.had_2400 = false;
+                        }
                     });
-                    ui.separator();
-                    ui.checkbox(&mut self.current_record.has_rating, "Have a rating");
-                    ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
-                        ui.add(
-                            egui::DragValue::new(&mut self.current_record.my_rating)
-                                .clamp_range(1400..=5000)
-                                .prefix("Have rating: "),
-                        )
-                    });
-                    if !self.current_record.had_2300 {
-                        self.current_record.had_2400 = false;
-                    }
-                    //ui
                 });
             }
         });
