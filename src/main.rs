@@ -427,7 +427,7 @@ impl EframeApp for App {
                 ui.add_space(40.0);
                 ui.horizontal(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.vertical_centered_justified(|ui| {
+                        ui.vertical_centered(|ui| {
                             for (index, game) in self.current_record.games.iter_mut().enumerate() {
                                 ui.horizontal(|ui| {
                                     ui.add(|ui: &mut egui::Ui| {
