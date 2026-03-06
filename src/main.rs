@@ -4,6 +4,7 @@ use csv::ReaderBuilder;
 use eframe::App as EframeApp;
 /// GUI
 use eframe::egui;
+use eframe::egui::Widget;
 use egui::ViewportBuilder;
 use std::error::Error;
 /// CSV
@@ -135,11 +136,8 @@ impl App {
                     &sender,
                 )?;
 
-                let records;
-                match load_from_csv("probabilities.csv") {
-                    Ok(r) => {
-                        records = r;
-                    }
+                let records = match load_from_csv("probabilities.csv") {
+                    Ok(r) => r,
                     Err(_) => {
                         send(Message {
                             text: "upsplash".to_string(),
@@ -148,7 +146,7 @@ impl App {
                         }, &sender)?;
                         return Ok(());
                     }
-                }
+                };
 
                 for i in 0..=5000 {
                     if !records.iter().any(|r| r.min_diff <= i && r.max_diff >= i) {
@@ -181,10 +179,7 @@ impl App {
                         match message.text.as_str() {
                             "close" => return Ok(()),
                             "k-factor" => {
-                                let mut data;
-                                if message.data.is_none() {
-                                } else {
-                                    data = message.data.unwrap();
+                                if let Some(mut data) = message.data {
                                     data.k_factor =
                                         if !(data.is_eighteen && data.played_in_tour_30_games) {
                                             10
@@ -207,16 +202,60 @@ impl App {
                                 }
                             }
                             "calc" => {
-                                if (&message).data.is_none() {
-                                } else {
-                                    let data = message.data.unwrap();
+                                if let Some(data) = message.data {
+                                    if data.games.is_empty() {
+                                        send(
+                                            Message {
+                                                text: "calc".to_string(),
+                                                data: None,
+                                                msg: Some(
+                                                    "The rating will change by 0 points."
+                                                        .to_string(),
+                                                ),
+                                            },
+                                            &sender,
+                                        )?;
+                                        continue;
+                                    }
+
+                                    if !data.has_rating {
+                                        send(
+                                            Message {
+                                                text: "calc".to_string(),
+                                                data: None,
+                                                msg: Some(
+                                                    "Currently, the program does not support calculating rating changes for unrated players."
+                                                        .to_string(),
+                                                ),
+                                            },
+                                            &sender,
+                                        )?;
+                                        continue;
+                                    }
+
+                                    for game in data.games.iter() {
+                                        if !(game.result == 1.0
+                                            || game.result == 0.5
+                                            || game.result == 0.0)
+                                        {
+                                            send(
+                                                Message {
+                                                    text: "calc".to_string(),
+                                                    data: None,
+                                                    msg: Some(
+                                                        "Game result must be known and can only be Win, Draw, or Loss."
+                                                            .to_string(),
+                                                    ),
+                                                },
+                                                &sender,
+                                            )?;
+                                            return Ok(());
+                                        }
+                                    }
+
                                     let mut sum: f64 = 0.0;
                                     for game in data.games.iter() {
-                                        let diff = if data.my_rating > game.opponent_rating {
-                                            data.my_rating - game.opponent_rating
-                                        } else {
-                                            game.opponent_rating - data.my_rating
-                                        };
+                                        let diff = data.my_rating.abs_diff(game.opponent_rating);
                                         let bigger = data.my_rating > game.opponent_rating;
                                         let prob = records
                                             .iter()
@@ -321,15 +360,18 @@ impl EframeApp for App {
                 }
                 _ => {}
             }
-        } else if let Err(_) = self.tx.send(Message {
-            text: "test".to_string(),
-            data: None,
-            msg: None,
-        }) {
-            if !self.wait {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                return;
-            }
+        } else if self
+            .tx
+            .send(Message {
+                text: "test".to_string(),
+                data: None,
+                msg: None,
+            })
+            .is_err()
+            && !self.wait
+        {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -339,7 +381,7 @@ impl EframeApp for App {
                     text.push(self.text[i].clone());
                 }
                 ui.heading("FIDE Elo Rating Calculator");
-                let mut layout = if text.len() > 0 {
+                let mut layout = if !text.is_empty() {
                     text[0].clone()
                 } else {
                     "".to_string()
@@ -371,9 +413,9 @@ impl EframeApp for App {
                             if ui.button("–").clicked() {
                                 ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                             }
-                            ui.add_space(ui.available_width() / 2.0 - 40.0);
-                            ui.label("FIDE Elo Rating Calculator      ");
-                            ui.add_space(ui.available_width() / 2.0 - 40.0);
+                            ui.add_space((ui.available_width() / 2.0 - 40.0) - 40.0);
+                            ui.label("FIDE Elo Rating Calculator");
+                            ui.add_space((ui.available_width() / 2.0 - 40.0) - 40.0);
                         });
                     });
                     if response.dragged() {
@@ -385,33 +427,69 @@ impl EframeApp for App {
                 ui.add_space(40.0);
                 ui.horizontal(|ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.add(
-                            egui::TextEdit::multiline(&mut self.current_record.games_text)
-                                .desired_rows(100),
-                        )
+                        ui.vertical_centered_justified(|ui| {
+                            for (index, game) in self.current_record.games.iter_mut().enumerate() {
+                                ui.horizontal(|ui| {
+                                    ui.add(|ui: &mut egui::Ui| {
+                                        egui::DragValue::new(&mut game.opponent_rating)
+                                            .clamp_range(1400..=5000)
+                                            .prefix("Opponent rating: ")
+                                            .ui(ui)
+                                    });
+                                    ui.add(|ui: &mut egui::Ui| {
+                                        egui::ComboBox::from_id_source(index)
+                                            .selected_text(match game.result {
+                                                1.0 => "Win",
+                                                0.5 => "Draw",
+                                                0.0 => "Loss",
+                                                _ => "Unknown",
+                                            })
+                                            .show_ui(ui, |ui: &mut egui::Ui| {
+                                                ui.selectable_value(&mut game.result, 1.0, "Win");
+                                                ui.selectable_value(&mut game.result, 0.5, "Draw");
+                                                ui.selectable_value(&mut game.result, 0.0, "Loss");
+                                            })
+                                            .response
+                                    });
+                                });
+                                ui.separator();
+                            }
+                            if ui.button("Add Game").clicked() {
+                                self.current_record.games.push(OnePlayerGame {
+                                    opponent_rating: 1400,
+                                    result: -1.0,
+                                });
+                            }
+                        });
                     });
                     ui.separator();
-                    ui.vertical(|ui| {
-                        ui.checkbox(
-                            &mut self.current_record.is_eighteen,
-                            "Is 18 years old or older",
-                        );
-                        ui.checkbox(
-                            &mut self.current_record.played_in_tour_30_games,
-                            "Played at least 30 games in the tournament",
-                        );
-                        ui.checkbox(
-                            &mut self.current_record.had_2300,
-                            "Had a rating of at least 2300",
-                        );
-                        ui.add_enabled(self.current_record.had_2300, |ui: &mut egui::Ui| {
+                    ui.vertical(|ui: &mut egui::Ui| {
+                        ui.checkbox(&mut self.manually, "Manually");
+                        ui.add_enabled(!self.manually, |ui: &mut egui::Ui| {
                             ui.checkbox(
-                                &mut self.current_record.had_2400,
-                                "Had a rating of at least 2400",
-                            )
+                                &mut self.current_record.is_eighteen,
+                                "Is 18 years old or older",
+                            );
+                            ui.checkbox(
+                                &mut self.current_record.played_in_tour_30_games,
+                                "Played at least 30 games in the tournament",
+                            );
+                            ui.checkbox(
+                                &mut self.current_record.had_2300,
+                                "Had a rating of at least 2300",
+                            );
+                            ui.add_enabled(self.current_record.had_2300, |ui: &mut egui::Ui| {
+                                ui.checkbox(
+                                    &mut self.current_record.had_2400,
+                                    "Had a rating of at least 2400",
+                                )
+                            });
+                            ui.separator()
                         });
-                        ui.separator();
                         ui.checkbox(&mut self.current_record.has_rating, "Have a rating");
+                        if !self.current_record.had_2300 {
+                            self.current_record.had_2400 = false;
+                        }
                         ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
                             ui.add(
                                 egui::DragValue::new(&mut self.current_record.my_rating)
@@ -419,9 +497,8 @@ impl EframeApp for App {
                                     .prefix("Have rating: "),
                             )
                         });
-                        if !self.current_record.had_2300 {
-                            self.current_record.had_2400 = false;
-                        }
+                        ui.add_space(10.0);
+                        ui.label(self.rating.clone());
                     });
                 });
             }
@@ -439,7 +516,7 @@ fn main() {
             inner_size: Some(egui::vec2(270.0, 80.0)),
             ..Default::default()
         },
-        centered: true,
+        //centered: true,
         ..Default::default()
     };
 
