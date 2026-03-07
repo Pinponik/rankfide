@@ -180,16 +180,15 @@ impl App {
                             "close" => return Ok(()),
                             "k-factor" => {
                                 if let Some(mut data) = message.data {
-                                    data.k_factor =
-                                        if !(data.is_eighteen && data.played_in_tour_30_games) {
-                                            10
-                                        } else if !(data.is_eighteen && data.had_2300) {
-                                            40
-                                        } else if !(data.had_2400) {
-                                            20
-                                        } else {
-                                            10
-                                        };
+                                    data.k_factor = if !data.played_in_tour_30_games {
+                                        40
+                                    } else if !data.is_eighteen && !data.had_2300 {
+                                        40
+                                    } else if !data.had_2400 {
+                                        20
+                                    } else {
+                                        10
+                                    };
 
                                     send(
                                         Message {
@@ -233,24 +232,30 @@ impl App {
                                         continue;
                                     }
 
+                                    let mut invalid = false;
                                     for game in data.games.iter() {
                                         if !(game.result == 1.0
                                             || game.result == 0.5
                                             || game.result == 0.0)
                                         {
-                                            send(
-                                                Message {
-                                                    text: "calc".to_string(),
-                                                    data: None,
-                                                    msg: Some(
-                                                        "Game result must be known and can only be Win, Draw, or Loss."
-                                                            .to_string(),
-                                                    ),
-                                                },
-                                                &sender,
-                                            )?;
-                                            return Ok(());
+                                            invalid = true;
+                                            break;
                                         }
+                                    }
+                                    if invalid {
+                                        send(
+                                            Message {
+                                                text: "calc".to_string(),
+                                                data: None,
+                                                msg: Some(
+                                                    "Game result must be known and can only be Win, Draw, or Loss."
+                                                        .to_string(),
+                                                ),
+                                            },
+                                            &sender,
+                                        )?;
+                                        // continue processing future messages instead of terminating thread
+                                        continue;
                                     }
 
                                     let mut sum: f64 = 0.0;
@@ -426,42 +431,66 @@ impl EframeApp for App {
                 egui::CentralPanel::default().show(ctx, |_ui| {});
                 ui.add_space(40.0);
                 ui.horizontal(|ui| {
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        ui.vertical_centered(|ui| {
-                            for (index, game) in self.current_record.games.iter_mut().enumerate() {
-                                ui.horizontal(|ui| {
-                                    ui.add(|ui: &mut egui::Ui| {
-                                        egui::DragValue::new(&mut game.opponent_rating)
-                                            .clamp_range(1400..=5000)
-                                            .prefix("Opponent rating: ")
-                                            .ui(ui)
+                    egui::ScrollArea::vertical()
+                        .max_height(f32::INFINITY)
+                        .max_width(350.0)
+                        .min_scrolled_height(400_f32)
+                        .show(ui, |ui| {
+                            ui.vertical_centered(|ui| {
+                                for (index, game) in
+                                    self.current_record.games.iter_mut().enumerate()
+                                {
+                                    ui.horizontal(|ui| {
+                                        ui.add(|ui: &mut egui::Ui| {
+                                            egui::DragValue::new(&mut game.opponent_rating)
+                                                .clamp_range(1400..=5000)
+                                                .prefix("Opponent rating: ")
+                                                .ui(ui)
+                                        });
+                                        ui.add(|ui: &mut egui::Ui| {
+                                            egui::ComboBox::from_id_source(index)
+                                                .selected_text(match game.result {
+                                                    -1.0 => "Unknown",
+                                                    1.0 => "Win",
+                                                    0.5 => "Draw",
+                                                    0.0 => "Loss",
+                                                    _ => "Unknown",
+                                                })
+                                                .show_ui(ui, |ui: &mut egui::Ui| {
+                                                    ui.selectable_value(
+                                                        &mut game.result,
+                                                        -1.0,
+                                                        "Unknown",
+                                                    );
+                                                    ui.selectable_value(
+                                                        &mut game.result,
+                                                        1.0,
+                                                        "Win",
+                                                    );
+                                                    ui.selectable_value(
+                                                        &mut game.result,
+                                                        0.5,
+                                                        "Draw",
+                                                    );
+                                                    ui.selectable_value(
+                                                        &mut game.result,
+                                                        0.0,
+                                                        "Loss",
+                                                    );
+                                                })
+                                                .response
+                                        });
                                     });
-                                    ui.add(|ui: &mut egui::Ui| {
-                                        egui::ComboBox::from_id_source(index)
-                                            .selected_text(match game.result {
-                                                1.0 => "Win",
-                                                0.5 => "Draw",
-                                                0.0 => "Loss",
-                                                _ => "Unknown",
-                                            })
-                                            .show_ui(ui, |ui: &mut egui::Ui| {
-                                                ui.selectable_value(&mut game.result, 1.0, "Win");
-                                                ui.selectable_value(&mut game.result, 0.5, "Draw");
-                                                ui.selectable_value(&mut game.result, 0.0, "Loss");
-                                            })
-                                            .response
+                                    ui.separator();
+                                }
+                                if ui.button("Add Game").clicked() {
+                                    self.current_record.games.push(OnePlayerGame {
+                                        opponent_rating: 1400,
+                                        result: -1.0,
                                     });
-                                });
-                                ui.separator();
-                            }
-                            if ui.button("Add Game").clicked() {
-                                self.current_record.games.push(OnePlayerGame {
-                                    opponent_rating: 1400,
-                                    result: -1.0,
-                                });
-                            }
+                                }
+                            });
                         });
-                    });
                     ui.separator();
                     ui.vertical(|ui: &mut egui::Ui| {
                         ui.checkbox(&mut self.manually, "Manually");
@@ -483,9 +512,27 @@ impl EframeApp for App {
                                     &mut self.current_record.had_2400,
                                     "Had a rating of at least 2400",
                                 )
-                            });
-                            ui.separator()
+                            })
                         });
+                        if self.manually {
+                            ui.add(
+                                egui::DragValue::new(&mut self.current_record.k_factor)
+                                    .clamp_range(10..=40)
+                                    .prefix("K-factor: "),
+                            );
+                        } else {
+                            self.tx
+                                .send(Message {
+                                    text: "k-factor".to_string(),
+                                    data: Some(self.current_record.clone()),
+                                    msg: None,
+                                })
+                                .unwrap_or_else(|_e| {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+                                });
+                            ui.label(format!("K-factor: {}", self.current_record.k_factor));
+                        }
+                        ui.separator();
                         ui.checkbox(&mut self.current_record.has_rating, "Have a rating");
                         if !self.current_record.had_2300 {
                             self.current_record.had_2400 = false;
@@ -497,6 +544,18 @@ impl EframeApp for App {
                                     .prefix("Have rating: "),
                             )
                         });
+                        ui.add_space(10.0);
+                        if ui.button("Calculate").clicked() {
+                            self.tx
+                                .send(Message {
+                                    text: "calc".to_string(),
+                                    data: Some(self.current_record.clone()),
+                                    msg: None,
+                                })
+                                .unwrap_or_else(|_e| {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+                                });
+                        }
                         ui.add_space(10.0);
                         ui.label(self.rating.clone());
                     });
@@ -513,7 +572,7 @@ fn main() {
             decorations: Some(false),
             resizable: Some(false),
             min_inner_size: Some(egui::vec2(270.0, 80.0)),
-            inner_size: Some(egui::vec2(270.0, 80.0)),
+            inner_size: Some(egui::vec2(900.0, 500.0)),
             ..Default::default()
         },
         //centered: true,
