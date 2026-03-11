@@ -180,24 +180,35 @@ impl App {
                             "close" => return Ok(()),
                             "k-factor" => {
                                 if let Some(mut data) = message.data {
-                                    data.k_factor = if !data.played_in_tour_30_games {
-                                        40
-                                    } else if !data.is_eighteen && !data.had_2300 {
-                                        40
-                                    } else if !data.had_2400 {
-                                        20
-                                    } else {
-                                        10
-                                    };
+                                    if !message.msg.is_some() {
+                                        data.k_factor = if !data.played_in_tour_30_games {
+                                            40
+                                        } else if !data.is_eighteen && !data.had_2300 {
+                                            40
+                                        } else if !data.had_2400 {
+                                            20
+                                        } else {
+                                            10
+                                        };
 
-                                    send(
-                                        Message {
-                                            text: "k-factor".to_string(),
-                                            data: None,
-                                            msg: Some(data.k_factor.to_string()),
-                                        },
-                                        &sender,
-                                    )?;
+                                        send(
+                                            Message {
+                                                text: "k-factor".to_string(),
+                                                data: None,
+                                                msg: Some(data.k_factor.to_string()),
+                                            },
+                                            &sender,
+                                        )?;
+                                    } else {
+                                        send(
+                                            Message {
+                                                text: "k-factor".to_string(),
+                                                data: None,
+                                                msg: Some(data.k_factor.to_string()),
+                                            },
+                                            &sender,
+                                        )?;
+                                    }
                                 }
                             }
                             "calc" => {
@@ -208,8 +219,7 @@ impl App {
                                                 text: "calc".to_string(),
                                                 data: None,
                                                 msg: Some(
-                                                    "The rating will change by 0 points."
-                                                        .to_string(),
+                                                    "The rating will does not change.".to_string(),
                                                 ),
                                             },
                                             &sender,
@@ -230,6 +240,12 @@ impl App {
                                             &sender,
                                         )?;
                                         continue;
+                                    }
+
+                                    let mut k = data.k_factor;
+
+                                    while data.games.len() * k as usize > 700 {
+                                        k -= 1;
                                     }
 
                                     let mut invalid = false;
@@ -278,12 +294,22 @@ impl App {
                                             text: "calc".to_string(),
                                             data: None,
                                             msg: Some(format!(
-                                                "The rating will change by {} points.",
-                                                (data.k_factor as f64 * sum)
+                                                "The rating will be {} {}points.",
+                                                (k as f64 * sum) + data.my_rating as f64,
+                                                if k as f64 * sum == 0.0 {
+                                                    "".to_string()
+                                                } else {
+                                                    format!(
+                                                        "({}{}) ",
+                                                        if k as f64 * sum > 0.0 { "+" } else { "" },
+                                                        (k as f64 * sum)
+                                                    )
+                                                }
                                             )),
                                         },
                                         &sender,
                                     )?;
+                                    continue;
                                 }
                             }
                             _ => {}
@@ -350,7 +376,7 @@ impl EframeApp for App {
                     self.splash = false;
                     self.splash_msg = "".to_string();
                     ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                        700.0, 500.0,
+                        700.0, 290.0,
                     )));
                 }
                 "k-factor" => {
@@ -434,8 +460,9 @@ impl EframeApp for App {
                     egui::ScrollArea::vertical()
                         .max_height(f32::INFINITY)
                         .max_width(350.0)
-                        .min_scrolled_height(400_f32)
+                        .min_scrolled_height(200_f32)
                         .show(ui, |ui| {
+                            let mut rm = Vec::new();
                             ui.vertical_centered(|ui| {
                                 for (index, game) in
                                     self.current_record.games.iter_mut().enumerate()
@@ -480,8 +507,15 @@ impl EframeApp for App {
                                                 })
                                                 .response
                                         });
+                                        if ui.button("Remove").clicked() {
+                                            rm.push(index);
+                                        }
+                                        rm.reverse();
                                     });
                                     ui.separator();
+                                }
+                                for i in rm {
+                                    self.current_record.games.remove(i);
                                 }
                                 if ui.button("Add Game").clicked() {
                                     self.current_record.games.push(OnePlayerGame {
@@ -521,6 +555,7 @@ impl EframeApp for App {
                                     .prefix("K-factor: "),
                             );
                         } else {
+                            // always query the thread when not in manual mode
                             self.tx
                                 .send(Message {
                                     text: "k-factor".to_string(),
@@ -546,6 +581,28 @@ impl EframeApp for App {
                         });
                         ui.add_space(10.0);
                         if ui.button("Calculate").clicked() {
+                            if !self.manually {
+                                self.tx
+                                    .send(Message {
+                                        text: "k-factor".to_string(),
+                                        data: Some(self.current_record.clone()),
+                                        msg: None,
+                                    })
+                                    .unwrap_or_else(|_e| {
+                                        ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+                                    });
+                                if let Ok(message) = self.rx.recv() {
+                                    if message.text == "k-factor" {
+                                        self.current_record.k_factor = message
+                                            .msg
+                                            .unwrap_or("0".to_string())
+                                            .parse::<u16>()
+                                            .unwrap_or(0);
+                                    }
+                                } else {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                                }
+                            }
                             self.tx
                                 .send(Message {
                                     text: "calc".to_string(),
@@ -556,12 +613,44 @@ impl EframeApp for App {
                                     ctx.send_viewport_cmd(egui::ViewportCommand::Close)
                                 });
                         }
+                        if !self.manually {
+                            self.tx
+                                .send(Message {
+                                    text: "k-factor".to_string(),
+                                    data: Some(self.current_record.clone()),
+                                    msg: None,
+                                })
+                                .unwrap_or_else(|_e| {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+                                });
+                            if let Ok(message) = self.rx.recv() {
+                                if message.text == "k-factor" {
+                                    self.current_record.k_factor = message
+                                        .msg
+                                        .unwrap_or("0".to_string())
+                                        .parse::<u16>()
+                                        .unwrap_or(0);
+                                }
+                            } else {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        }
+                        self.tx
+                            .send(Message {
+                                text: "calc".to_string(),
+                                data: Some(self.current_record.clone()),
+                                msg: None,
+                            })
+                            .unwrap_or_else(|_e| {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+                            });
                         ui.add_space(10.0);
                         ui.label(self.rating.clone());
                     });
                 });
             }
         });
+        ctx.request_repaint();
     }
 }
 
