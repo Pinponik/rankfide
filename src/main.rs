@@ -17,24 +17,14 @@ use std::thread::spawn;
 /// CSV
 
 struct ProbabilityRecord {
-    min_diff: u16,
-    max_diff: u16,
+    min_diff: f32,
+    max_diff: f32,
     prob_big: f32,
     prob_small: f32,
 }
 
 impl ProbabilityRecord {
-    #[allow(dead_code)]
-    fn new() -> Self {
-        Self {
-            min_diff: 0,
-            max_diff: 0,
-            prob_big: 0.0,
-            prob_small: 0.0,
-        }
-    }
-
-    fn new_from(min_diff: u16, max_diff: u16, prob_big: f32, prob_small: f32) -> Self {
+    fn new_from(min_diff: f32, max_diff: f32, prob_big: f32, prob_small: f32) -> Self {
         Self {
             min_diff,
             max_diff,
@@ -48,8 +38,8 @@ impl ProbabilityRecord {
             return Err("Invalid record length".into());
         }
         Ok(Self::new_from(
-            record[0].parse::<u16>()?,
-            record[1].parse::<u16>()?,
+            record[0].parse::<f32>()?,
+            record[1].parse::<f32>()?,
             record[2].parse::<f32>()?,
             record[3].parse::<f32>()?,
         ))
@@ -96,11 +86,9 @@ struct AppState {
     played_in_tour_30_games: bool,
     had_2300: bool,
     had_2400: bool,
-    games_text: String,
 }
 
 struct App {
-    last_record: AppState,
     current_record: AppState,
     tx: Sender<Message>,
     rx: Receiver<Message>,
@@ -149,7 +137,10 @@ impl App {
                 };
 
                 for i in 0..=5000 {
-                    if !records.iter().any(|r| r.min_diff <= i && r.max_diff >= i) {
+                    if !records
+                        .iter()
+                        .any(|r| r.min_diff <= i as f32 && r.max_diff >= i as f32)
+                    {
                         send(
                             Message {
                                 text: "upsplash".to_string(),
@@ -157,6 +148,43 @@ impl App {
                                 msg: Some(
                                     "Error!|The `probabilities.csv` file is invalid.|OK"
                                         .to_string(),
+                                ),
+                            },
+                            &sender,
+                        )?;
+                        return Ok(());
+                    }
+                }
+
+                let initial = match load_from_csv("initial.csv") {
+                    Ok(r) => r,
+                    Err(_) => {
+                        send(
+                            Message {
+                                text: "upsplash".to_string(),
+                                data: None,
+                                msg: Some(
+                                    "Error!|The `initial.csv` file is missing or inaccessible.|OK"
+                                        .to_string(),
+                                ),
+                            },
+                            &sender,
+                        )?;
+                        return Ok(());
+                    }
+                };
+
+                let mut i = 0.00;
+                while i <= 1.00 {
+                    if initial.iter().any(|r| r.min_diff == i as f32) {
+                        i += 0.01;
+                    } else {
+                        send(
+                            Message {
+                                text: "upsplash".to_string(),
+                                data: None,
+                                msg: Some(
+                                    "Error!|The `initial.csv` file is invalid.|OK".to_string(),
                                 ),
                             },
                             &sender,
@@ -174,8 +202,9 @@ impl App {
                     &sender,
                 )?;
 
-                loop {
+                'main: loop {
                     if let Ok(message) = receiver.recv() {
+                        // println!("Received message: {}", message.text);
                         match message.text.as_str() {
                             "close" => return Ok(()),
                             "k-factor" => {
@@ -219,21 +248,7 @@ impl App {
                                                 text: "calc".to_string(),
                                                 data: None,
                                                 msg: Some(
-                                                    "The rating will does not change.".to_string(),
-                                                ),
-                                            },
-                                            &sender,
-                                        )?;
-                                        continue;
-                                    }
-
-                                    if !data.has_rating {
-                                        send(
-                                            Message {
-                                                text: "calc".to_string(),
-                                                data: None,
-                                                msg: Some(
-                                                    "Currently, the program does not support calculating rating changes for unrated players."
+                                                    "Enter games to calculate rating changes."
                                                         .to_string(),
                                                 ),
                                             },
@@ -242,24 +257,12 @@ impl App {
                                         continue;
                                     }
 
-                                    let mut k = data.k_factor;
-
-                                    while data.games.len() * k as usize > 700 {
-                                        k -= 1;
-                                    }
-
-                                    let mut invalid = false;
                                     for game in data.games.iter() {
                                         if !(game.result == 1.0
                                             || game.result == 0.5
                                             || game.result == 0.0)
                                         {
-                                            invalid = true;
-                                            break;
-                                        }
-                                    }
-                                    if invalid {
-                                        send(
+                                            send(
                                             Message {
                                                 text: "calc".to_string(),
                                                 data: None,
@@ -269,9 +272,49 @@ impl App {
                                                 ),
                                             },
                                             &sender,
-                                        )?;
-                                        // continue processing future messages instead of terminating thread
-                                        continue;
+                                            )?;
+                                            continue 'main;
+                                        }
+                                    }
+
+                                    if !data.has_rating {
+                                        if data.games.len() < 5 {
+                                            send(
+                                                Message {
+                                                    text: "calc".to_string(),
+                                                    data: None,
+                                                    msg: Some(
+                                                        "At least 5 games are required for a player without an existing rating."
+                                                            .to_string(),
+                                                    ),
+                                                },
+                                                &sender,
+                                            )?;
+                                            continue 'main;
+                                        }
+
+                                        if !data.games.iter().any(|r| r.result > 0.0) {
+                                            send(
+                                                Message {
+                                                    text: "calc".to_string(),
+                                                    data: None,
+                                                    msg: Some(
+                                                        "At least one draw is required for a player without an existing rating."
+                                                            .to_string(),
+                                                    ),
+                                                },
+                                                &sender,
+                                            )?;
+                                            continue 'main;
+                                        }
+
+                                        continue 'main;
+                                    }
+
+                                    let mut k = data.k_factor;
+
+                                    while data.games.len() * k as usize > 700 {
+                                        k -= 1;
                                     }
 
                                     let mut sum: f64 = 0.0;
@@ -280,7 +323,10 @@ impl App {
                                         let bigger = data.my_rating > game.opponent_rating;
                                         let prob = records
                                             .iter()
-                                            .find(|r| r.min_diff <= diff && r.max_diff >= diff)
+                                            .find(|r| {
+                                                r.min_diff <= diff.into()
+                                                    && r.max_diff >= diff.into()
+                                            })
                                             .unwrap();
                                         sum += game.result as f64
                                             - if bigger {
@@ -294,15 +340,15 @@ impl App {
                                             text: "calc".to_string(),
                                             data: None,
                                             msg: Some(format!(
-                                                "The rating will be {} {}points.",
-                                                (k as f64 * sum) + data.my_rating as f64,
+                                                "The rating will be {}{}",
+                                                ((k as f64 * sum) + data.my_rating as f64).round(),
                                                 if k as f64 * sum == 0.0 {
-                                                    "".to_string()
+                                                    ".".to_string()
                                                 } else {
                                                     format!(
-                                                        "({}{}) ",
+                                                        " ({}{} points).",
                                                         if k as f64 * sum > 0.0 { "+" } else { "" },
-                                                        (k as f64 * sum)
+                                                        (k as f64 * sum).round()
                                                     )
                                                 }
                                             )),
@@ -323,17 +369,6 @@ impl App {
             let _ = main_loop(txforcsv, rxforcsv);
         });
         Self {
-            last_record: AppState {
-                has_rating: false,
-                my_rating: 0,
-                k_factor: 0,
-                games: Vec::new(),
-                is_eighteen: false,
-                played_in_tour_30_games: false,
-                had_2300: false,
-                had_2400: false,
-                games_text: "".to_string(),
-            },
             current_record: AppState {
                 has_rating: true,
                 my_rating: 0,
@@ -343,7 +378,6 @@ impl App {
                 played_in_tour_30_games: false,
                 had_2300: false,
                 had_2400: false,
-                games_text: "".to_string(),
             },
             tx,
             rx,
@@ -391,18 +425,8 @@ impl EframeApp for App {
                 }
                 _ => {}
             }
-        } else if self
-            .tx
-            .send(Message {
-                text: "test".to_string(),
-                data: None,
-                msg: None,
-            })
-            .is_err()
-            && !self.wait
-        {
+        } else {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            return;
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -468,6 +492,7 @@ impl EframeApp for App {
                                     self.current_record.games.iter_mut().enumerate()
                                 {
                                     ui.horizontal(|ui| {
+                                        ui.label(format!("#{}:", index + 1));
                                         ui.add(|ui: &mut egui::Ui| {
                                             egui::DragValue::new(&mut game.opponent_rating)
                                                 .clamp_range(1400..=5000)
@@ -555,16 +580,6 @@ impl EframeApp for App {
                                     .prefix("K-factor: "),
                             );
                         } else {
-                            // always query the thread when not in manual mode
-                            self.tx
-                                .send(Message {
-                                    text: "k-factor".to_string(),
-                                    data: Some(self.current_record.clone()),
-                                    msg: None,
-                                })
-                                .unwrap_or_else(|_e| {
-                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close)
-                                });
                             ui.label(format!("K-factor: {}", self.current_record.k_factor));
                         }
                         ui.separator();
@@ -576,6 +591,7 @@ impl EframeApp for App {
                             ui.add(
                                 egui::DragValue::new(&mut self.current_record.my_rating)
                                     .clamp_range(1400..=5000)
+                                    .speed(1)
                                     .prefix("Have rating: "),
                             )
                         });
