@@ -16,6 +16,7 @@ use std::thread::spawn;
 /////////////////////////////////////////////////////////////////////////////////
 /// CSV
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 struct ProbabilityRecord {
     min_diff: f32,
     max_diff: f32,
@@ -174,6 +175,8 @@ impl App {
                     }
                 };
 
+                println!("{:?}", initial);
+
                 let mut i = 0.00;
                 while i <= 1.00 {
                     if initial.iter().any(|r| r.min_diff == i as f32) {
@@ -202,7 +205,7 @@ impl App {
                     &sender,
                 )?;
 
-                'main: loop {
+                'lo: loop {
                     if let Ok(message) = receiver.recv() {
                         // println!("Received message: {}", message.text);
                         match message.text.as_str() {
@@ -273,7 +276,7 @@ impl App {
                                             },
                                             &sender,
                                             )?;
-                                            continue 'main;
+                                            continue 'lo;
                                         }
                                     }
 
@@ -290,7 +293,7 @@ impl App {
                                                 },
                                                 &sender,
                                             )?;
-                                            continue;
+                                            continue 'lo;
                                         }
 
                                         if !data.games.iter().any(|r| r.result > 0.0) {
@@ -305,60 +308,55 @@ impl App {
                                                 },
                                                 &sender,
                                             )?;
-                                            continue;
+                                            continue 'lo;
                                         }
 
                                         let mut ra = 0.0;
-                                        for game in data.games.iter() {
-                                            ra += game.opponent_rating.into();
-                                        }
-                                        ra += 1800 * 2.0;
+                                        ra += data.games.iter().fold(0.0, |acc, game| {
+                                            acc + game.opponent_rating as f64
+                                        });
+                                        ra += 1800.0 * 2.0;
                                         ra /= (data.games.len() as f64) + 2.0;
-                                        let half = (data.games.len() as f64) / 2.0;
                                         //sums result of all games, counting wins as 1, draws as 0.5, and losses as 0
-                                        let pkt = data
-                                            .games
+                                        let pkt = data.games.iter().fold(1.0_f64, |acc, game| {
+                                            acc as f64
+                                                + <f64 as Into<f64>>::into(game.result as f64)
+                                        });
+
+                                        println!("{}", pkt / (data.games.len() as f64 + 2.0));
+
+                                        let r = initial
                                             .iter()
-                                            .fold(0.0, |acc, game| acc + game.result.into());
-                                        let more = (-half) + pkt;
+                                            .find(|r| {
+                                                r.min_diff
+                                                    == (pkt as f32)
+                                                        / (data.games.len() as f32 + 2.0)
+                                            })
+                                            .unwrap();
 
-                                        match more {
-                                            0.0 => {
-                                                if ra >= 1400.0 {
-                                                    send(
-                                                        Message {
-                                                            text: "calc".to_string(),
-                                                            data: None,
-                                                            msg: Some(format!(
-                                                                "The rating will be {}.",
-                                                                ra.round()
-                                                            )),
-                                                        },
-                                                        &sender,
-                                                    )?;
-                                                } else {
-                                                    send(
-                                                        Message { text: calc, data: None, msg: Some("The rating will be {}. However, it is below the minimum threshold (1400).".to_string()) },
-                                                        &sender
-                                                    )?;
-                                                }
-                                            }
-                                            m if m > 0.0 => {
-                                                send(
-                                                    Message {
-                                                        text: "calc".to_string(),
-                                                        data: None,
-                                                        msg: Some(format!(
-                                                            "The rating will be {}",
-                                                            ra + (20 * more)
-                                                        )),
-                                                    },
-                                                    &sender,
-                                                )?;
-                                            } //PRACA!!! for negative `more`
-                                        }
+                                        send(
+                                            Message {
+                                                text: "calc".to_string(),
+                                                data: None,
+                                                msg: Some(format!(
+                                                    "The rating will be {}.{}",
+                                                    (ra + r.max_diff as f64).round(),
+                                                    if (ra + r.max_diff as f64).round() < 1400.0 {
+                                                        "However, since the minimum rating is 1400, the player will not have a rating below that.".to_string()
+                                                    } else if (ra + r.max_diff as f64).round()
+                                                        > 2200.0
+                                                    {
+                                                        "However, since the maximum rating is 2200, the player will have a rating of exactly 2200.".to_string()
+                                                    } else {
+                                                        "".to_string()
+                                                    }
+                                                )),
+                                            },
+                                            &sender,
+                                        )?;
 
-                                        continue;
+                                        println!("t");
+                                        continue 'lo;
                                     }
 
                                     let mut k = data.k_factor;
