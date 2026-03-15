@@ -175,8 +175,6 @@ impl App {
                     }
                 };
 
-                println!("{:?}", initial);
-
                 let mut i = 0.00;
                 while i <= 1.00 {
                     if initial.iter().any(|r| r.min_diff == i as f32) {
@@ -207,7 +205,6 @@ impl App {
 
                 'lo: loop {
                     if let Ok(message) = receiver.recv() {
-                        // println!("Received message: {}", message.text);
                         match message.text.as_str() {
                             "close" => return Ok(()),
                             "k-factor" => {
@@ -323,14 +320,14 @@ impl App {
                                                 + <f64 as Into<f64>>::into(game.result as f64)
                                         });
 
-                                        println!("{}", pkt / (data.games.len() as f64 + 2.0));
-
                                         let r = initial
                                             .iter()
                                             .find(|r| {
-                                                r.min_diff
-                                                    == (pkt as f32)
-                                                        / (data.games.len() as f32 + 2.0)
+                                                r.min_diff - 1.0
+                                                    < pkt as f32 / (data.games.len() as f32 + 2.0)
+                                                    && r.min_diff + 1.0
+                                                        > pkt as f32
+                                                            / (data.games.len() as f32 + 2.0)
                                             })
                                             .unwrap();
 
@@ -354,8 +351,6 @@ impl App {
                                             },
                                             &sender,
                                         )?;
-
-                                        println!("t");
                                         continue 'lo;
                                     }
 
@@ -644,7 +639,7 @@ impl EframeApp for App {
                             )
                         });
                         ui.add_space(10.0);
-                        if ui.button("Calculate").clicked() {
+                        /*if ui.button("Calculate").clicked() {
                             if !self.manually {
                                 self.tx
                                     .send(Message {
@@ -676,7 +671,7 @@ impl EframeApp for App {
                                 .unwrap_or_else(|_e| {
                                     ctx.send_viewport_cmd(egui::ViewportCommand::Close)
                                 });
-                        }
+                        }*/
                         if !self.manually {
                             self.tx
                                 .send(Message {
