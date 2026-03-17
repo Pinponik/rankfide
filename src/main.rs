@@ -1,4 +1,5 @@
-/* FIDE Elo Rating Calculator */
+//! FIDE Elo Rating Calculator
+//! `rankfide.exe`
 
 use csv::ReaderBuilder;
 use eframe::App as EframeApp;

@@ -9,13 +9,7 @@ Just download, compile, and use.
 
 ## Usage
 
-🟡 **[WARN] Compilation requires cargo 1.93 or later.**
-
-or if you need actual yellow markdown styling:
-
-> [WARN] Compilation requires cargo 1.93 or later.
-
-Note: Standard markdown doesn't support text colors. Use bold/italic for emphasis, or HTML `<span style="color: yellow;">` if your renderer supports it.
+🟡 **[<span style="color: yellow;">WARN</span>] Compilation requires cargo 1.93 or later.**
 
 ```
 cargo run --release # or `cargo run`
