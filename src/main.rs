@@ -309,27 +309,34 @@ impl App {
                                         }
 
                                         let mut ra = 0.0;
+                                        //println!("1: {ra}");
                                         ra += data.games.iter().fold(0.0, |acc, game| {
                                             acc + game.opponent_rating as f64
                                         });
+                                        //println!("2: {ra}");
                                         ra += 1800.0 * 2.0;
+                                        //println!("3: {ra}");
                                         ra /= (data.games.len() as f64) + 2.0;
+                                        //println!("4: {ra}");
                                         //sums result of all games, counting wins as 1, draws as 0.5, and losses as 0
                                         let pkt = data.games.iter().fold(1.0_f64, |acc, game| {
                                             acc as f64
                                                 + <f64 as Into<f64>>::into(game.result as f64)
                                         });
+                                        //println!("5: {pkt}");
 
                                         let r = initial
                                             .iter()
                                             .find(|r| {
-                                                r.min_diff - 1.0
-                                                    < pkt as f32 / (data.games.len() as f32 + 2.0)
-                                                    && r.min_diff + 1.0
-                                                        > pkt as f32
-                                                            / (data.games.len() as f32 + 2.0)
+                                                (r.min_diff - 0.01)
+                                                    < (pkt as f32 / (data.games.len() as f32 + 2.0))
+                                                    && (r.min_diff + 0.01)
+                                                        > (pkt as f32
+                                                            / (data.games.len() as f32 + 2.0))
                                             })
                                             .unwrap();
+
+                                        //println!("6: {} - {}", r.min_diff, r.max_diff);
 
                                         send(
                                             Message {
@@ -536,16 +543,17 @@ impl EframeApp for App {
                                 {
                                     ui.horizontal(|ui| {
                                         ui.label(format!("#{}:", index + 1));
+                                        ui.label("Opponent rating:");
                                         ui.add(|ui: &mut egui::Ui| {
                                             egui::DragValue::new(&mut game.opponent_rating)
                                                 .clamp_range(1400..=5000)
-                                                .prefix("Opponent rating: ")
+                                                .prefix("")
                                                 .ui(ui)
                                         });
                                         ui.add(|ui: &mut egui::Ui| {
                                             egui::ComboBox::from_id_source(index)
                                                 .selected_text(match game.result {
-                                                    -1.0 => "Unknown",
+                                                    -1.0 => "Result",
                                                     1.0 => "Win",
                                                     0.5 => "Draw",
                                                     0.0 => "Loss",
@@ -555,7 +563,7 @@ impl EframeApp for App {
                                                     ui.selectable_value(
                                                         &mut game.result,
                                                         -1.0,
-                                                        "Unknown",
+                                                        "Result",
                                                     );
                                                     ui.selectable_value(
                                                         &mut game.result,
@@ -595,48 +603,58 @@ impl EframeApp for App {
                         });
                     ui.separator();
                     ui.vertical(|ui: &mut egui::Ui| {
-                        ui.checkbox(&mut self.manually, "Manually");
-                        ui.add_enabled(!self.manually, |ui: &mut egui::Ui| {
-                            ui.checkbox(
-                                &mut self.current_record.is_eighteen,
-                                "Is 18 years old or older",
-                            );
-                            ui.checkbox(
-                                &mut self.current_record.played_in_tour_30_games,
-                                "Played at least 30 games in the tournament",
-                            );
-                            ui.checkbox(
-                                &mut self.current_record.had_2300,
-                                "Had a rating of at least 2300",
-                            );
-                            ui.add_enabled(self.current_record.had_2300, |ui: &mut egui::Ui| {
-                                ui.checkbox(
-                                    &mut self.current_record.had_2400,
-                                    "Had a rating of at least 2400",
-                                )
-                            })
+                        ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
+                            ui.checkbox(&mut self.manually, "Manually")
                         });
-                        if self.manually {
-                            ui.add(
-                                egui::DragValue::new(&mut self.current_record.k_factor)
-                                    .clamp_range(10..=40)
-                                    .prefix("K-factor: "),
-                            );
-                        } else {
-                            ui.label(format!("K-factor: {}", self.current_record.k_factor));
-                        }
+                        ui.add_enabled(
+                            !self.manually && self.current_record.has_rating,
+                            |ui: &mut egui::Ui| {
+                                ui.checkbox(
+                                    &mut self.current_record.is_eighteen,
+                                    "Is 18 years old or older",
+                                );
+                                ui.checkbox(
+                                    &mut self.current_record.played_in_tour_30_games,
+                                    "Played at least 30 games in the tournament",
+                                );
+                                ui.checkbox(
+                                    &mut self.current_record.had_2300,
+                                    "Had a rating of at least 2300",
+                                );
+                                ui.add_enabled(self.current_record.had_2300, |ui: &mut egui::Ui| {
+                                    ui.checkbox(
+                                        &mut self.current_record.had_2400,
+                                        "Had a rating of at least 2400",
+                                    )
+                                })
+                            },
+                        );
+                        ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
+                            if self.manually {
+                                ui.add(
+                                    egui::DragValue::new(&mut self.current_record.k_factor)
+                                        .clamp_range(10..=40)
+                                        .prefix("K-factor: "),
+                                )
+                            } else {
+                                ui.label(format!("K-factor: {}", self.current_record.k_factor))
+                            }
+                        });
                         ui.separator();
                         ui.checkbox(&mut self.current_record.has_rating, "Have a rating");
                         if !self.current_record.had_2300 {
                             self.current_record.had_2400 = false;
                         }
                         ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut self.current_record.my_rating)
-                                    .clamp_range(1400..=5000)
-                                    .speed(1)
-                                    .prefix("Have rating: "),
-                            )
+                            ui.horizontal(|ui| {
+                                ui.label("Rating:");
+                                ui.add(
+                                    egui::DragValue::new(&mut self.current_record.my_rating)
+                                        .clamp_range(1400..=5000)
+                                        .speed(1),
+                                )
+                            })
+                            .response
                         });
                         ui.add_space(10.0);
                         /*if ui.button("Calculate").clicked() {
@@ -720,7 +738,8 @@ fn main() {
             decorations: Some(false),
             resizable: Some(false),
             min_inner_size: Some(egui::vec2(270.0, 80.0)),
-            inner_size: Some(egui::vec2(900.0, 500.0)),
+            max_inner_size: Some(egui::vec2(900.0, 500.0)),
+            inner_size: Some(egui::vec2(270.0, 80.0)),
             ..Default::default()
         },
         //centered: true,
