@@ -373,7 +373,7 @@ impl App {
                                         Message {
                                             text: "k".to_string(),
                                             data: None,
-                                            msg: Some(format!("(Used: {k}")),
+                                            msg: Some(format!("(Used: {k})")),
                                         },
                                         &sender,
                                     )?;
@@ -448,7 +448,7 @@ impl App {
             rating: "".to_string(),
             wait: false,
             text: Vec::new(),
-            k: Vec::new(),
+            k: "(Used: 40)".to_string(),
         }
     }
 }
@@ -480,7 +480,11 @@ impl EframeApp for App {
                         .msg
                         .unwrap_or("0".to_string())
                         .parse::<u16>()
-                        .unwrap_or(0);
+                        .unwrap_or(
+                            format!("(Used: {}))", self.current_record.k_factor)
+                                .parse::<u16>()
+                                .unwrap_or(0),
+                        );
                 }
                 "k" => {
                     self.k = data.msg.unwrap_or("".to_string());
@@ -490,7 +494,7 @@ impl EframeApp for App {
                 }
                 _ => {}
             }
-        } else {
+        } else if !self.wait {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
@@ -644,19 +648,19 @@ impl EframeApp for App {
                                 })
                             },
                         );
-                        ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
-                            if self.manually {
-                                ui.horizontal(|ui: &mut egui::Ui| {
+                        ui.horizontal(|ui| {
+                            ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
+                                if self.manually {
                                     ui.add(
                                         egui::DragValue::new(&mut self.current_record.k_factor)
                                             .clamp_range(10..=40)
                                             .prefix("K-factor: "),
-                                    );
-                                    ui.label(self.k.clone())
-                                })
-                            } else {
-                                ui.label(format!("K-factor: {}", self.current_record.k_factor))
-                            }
+                                    )
+                                } else {
+                                    ui.label(format!("K-factor: {}", self.current_record.k_factor))
+                                }
+                            });
+                            ui.label(&self.k);
                         });
                         ui.separator();
                         ui.checkbox(&mut self.current_record.has_rating, "Have a rating");
