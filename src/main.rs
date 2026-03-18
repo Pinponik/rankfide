@@ -100,6 +100,7 @@ struct App {
     rating: String,
     wait: bool,
     text: Vec<String>,
+    k: String,
 }
 
 impl App {
@@ -368,6 +369,15 @@ impl App {
                                         k -= 1;
                                     }
 
+                                    send(
+                                        Message {
+                                            text: "k".to_string(),
+                                            data: None,
+                                            msg: Some(format!("(Used: {k}")),
+                                        },
+                                        &sender,
+                                    )?;
+
                                     let mut sum: f64 = 0.0;
                                     for game in data.games.iter() {
                                         let diff = data.my_rating.abs_diff(game.opponent_rating);
@@ -438,6 +448,7 @@ impl App {
             rating: "".to_string(),
             wait: false,
             text: Vec::new(),
+            k: Vec::new(),
         }
     }
 }
@@ -470,6 +481,9 @@ impl EframeApp for App {
                         .unwrap_or("0".to_string())
                         .parse::<u16>()
                         .unwrap_or(0);
+                }
+                "k" => {
+                    self.k = data.msg.unwrap_or("".to_string());
                 }
                 "calc" => {
                     self.rating = data.msg.unwrap_or("".to_string());
@@ -632,11 +646,14 @@ impl EframeApp for App {
                         );
                         ui.add_enabled(self.current_record.has_rating, |ui: &mut egui::Ui| {
                             if self.manually {
-                                ui.add(
-                                    egui::DragValue::new(&mut self.current_record.k_factor)
-                                        .clamp_range(10..=40)
-                                        .prefix("K-factor: "),
-                                )
+                                ui.horizontal(|ui: &mut egui::Ui| {
+                                    ui.add(
+                                        egui::DragValue::new(&mut self.current_record.k_factor)
+                                            .clamp_range(10..=40)
+                                            .prefix("K-factor: "),
+                                    );
+                                    ui.label(self.k.clone())
+                                })
                             } else {
                                 ui.label(format!("K-factor: {}", self.current_record.k_factor))
                             }
