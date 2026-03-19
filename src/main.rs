@@ -459,43 +459,41 @@ impl EframeApp for App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             return;
         }
-        if let Ok(data) = self.rx.try_recv()
-            && !self.wait
-        {
-            match data.text.as_str() {
-                "upsplash" => {
-                    self.splash = true;
-                    self.splash_msg = data.msg.unwrap_or("".to_string());
-                    self.text = self.splash_msg.split('|').map(|s| s.to_string()).collect();
+        if !self.wait {
+            while let Ok(data) = self.rx.try_recv() {
+                match data.text.as_str() {
+                    "upsplash" => {
+                        self.splash = true;
+                        self.splash_msg = data.msg.unwrap_or("".to_string());
+                        self.text = self.splash_msg.split('|').map(|s| s.to_string()).collect();
+                    }
+                    "downsplash" => {
+                        self.splash = false;
+                        self.splash_msg = "".to_string();
+                        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                            700.0, 290.0,
+                        )));
+                    }
+                    "k-factor" => {
+                        self.current_record.k_factor = data
+                            .msg
+                            .unwrap_or("0".to_string())
+                            .parse::<u16>()
+                            .unwrap_or(
+                                format!("(Used: {}))", self.current_record.k_factor)
+                                    .parse::<u16>()
+                                    .unwrap_or(0),
+                            );
+                    }
+                    "k" => {
+                        self.k = data.msg.unwrap_or("".to_string());
+                    }
+                    "calc" => {
+                        self.rating = data.msg.unwrap_or("".to_string());
+                    }
+                    _ => {}
                 }
-                "downsplash" => {
-                    self.splash = false;
-                    self.splash_msg = "".to_string();
-                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                        700.0, 290.0,
-                    )));
-                }
-                "k-factor" => {
-                    self.current_record.k_factor = data
-                        .msg
-                        .unwrap_or("0".to_string())
-                        .parse::<u16>()
-                        .unwrap_or(
-                            format!("(Used: {}))", self.current_record.k_factor)
-                                .parse::<u16>()
-                                .unwrap_or(0),
-                        );
-                }
-                "k" => {
-                    self.k = data.msg.unwrap_or("".to_string());
-                }
-                "calc" => {
-                    self.rating = data.msg.unwrap_or("".to_string());
-                }
-                _ => {}
             }
-        } else if !self.wait {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
