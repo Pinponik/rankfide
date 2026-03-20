@@ -2,7 +2,6 @@
 
 A simple calculator written in Rust.
 It calculates rating with the FIDE's formula effective from March 2024.
- the game.
 
 Just download, compile, and use.
 
