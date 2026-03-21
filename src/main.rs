@@ -1,7 +1,6 @@
 //! FIDE Elo Rating Calculator
 //! `rankfide.exe`
 
-#![cfg(windows)]
 #![windows_subsystem = "windows"]
 
 use csv::ReaderBuilder;
